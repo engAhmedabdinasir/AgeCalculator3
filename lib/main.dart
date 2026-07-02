@@ -7,12 +7,32 @@ import 'services/supabase_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables from .env.local
-  await dotenv.load(fileName: 'assets/.env.local');
+  String supabaseUrl = const String.fromEnvironment('SUPABASE_URL');
+  String supabaseAnonKey = const String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+    try {
+      await dotenv.load(fileName: 'assets/.env.local');
+      supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+      supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+    } catch (e) {
+      if (kDebugMode) {
+        print('Could not load assets/.env.local: $e');
+      }
+    }
+  }
+
+  // Fallback to the default credentials if still empty
+  if (supabaseUrl.isEmpty) {
+    supabaseUrl = 'https://gzzruzkwkryyvscyombs.supabase.co';
+  }
+  if (supabaseAnonKey.isEmpty) {
+    supabaseAnonKey = 'sb_publishable_2lks3IuC_r3r4EnEZa5EXA_MAKVpm67';
+  }
 
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    publishableKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    url: supabaseUrl,
+    publishableKey: supabaseAnonKey,
   );
 
   runApp(const AgeCalculatorApp());
