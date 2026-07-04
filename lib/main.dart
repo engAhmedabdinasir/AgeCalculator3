@@ -227,10 +227,10 @@ class AgeCalculatorHome extends StatefulWidget {
   const AgeCalculatorHome({super.key});
 
   @override
-  State<AgeCalculatorHome> createState() => _AgeCalculatorHomeState();
+  State<AgeCalculatorHome> createState() => AgeCalculatorHomeState();
 }
 
-class _AgeCalculatorHomeState extends State<AgeCalculatorHome>
+class AgeCalculatorHomeState extends State<AgeCalculatorHome>
     with TickerProviderStateMixin {
   DateTime? _selectedDate;
   AgeResult? _ageResult;
@@ -289,8 +289,8 @@ class _AgeCalculatorHomeState extends State<AgeCalculatorHome>
     super.dispose();
   }
 
-  AgeResult _calculateAge(DateTime birthDate) {
-    final now = DateTime.now();
+  AgeResult calculateAge(DateTime birthDate, [DateTime? referenceDate]) {
+    final now = referenceDate ?? DateTime.now();
 
     int years = now.year - birthDate.year;
     int months = now.month - birthDate.month;
@@ -310,11 +310,14 @@ class _AgeCalculatorHomeState extends State<AgeCalculatorHome>
     final totalHours = now.difference(birthDate).inHours;
     final totalMinutes = now.difference(birthDate).inMinutes;
 
-    DateTime nextBirthday = DateTime(now.year, birthDate.month, birthDate.day);
-    if (nextBirthday.isBefore(now) || nextBirthday.isAtSameMomentAs(now)) {
-      nextBirthday = DateTime(now.year + 1, birthDate.month, birthDate.day);
+    final todayMidnight = DateTime(now.year, now.month, now.day);
+    final birthDateMidnight = DateTime(birthDate.year, birthDate.month, birthDate.day);
+
+    DateTime nextBirthday = DateTime(todayMidnight.year, birthDateMidnight.month, birthDateMidnight.day);
+    if (nextBirthday.isBefore(todayMidnight)) {
+      nextBirthday = DateTime(todayMidnight.year + 1, birthDateMidnight.month, birthDateMidnight.day);
     }
-    final daysUntilNext = nextBirthday.difference(now).inDays + 1;
+    final daysUntilNext = nextBirthday.difference(todayMidnight).inDays;
     final nextBirthdayStr =
         '${birthDate.day} ${_months[birthDate.month - 1]} ${nextBirthday.year}';
     final dayOfWeek = _weekdays[birthDate.weekday - 1];
@@ -358,7 +361,7 @@ class _AgeCalculatorHomeState extends State<AgeCalculatorHome>
     if (picked != null) {
       setState(() {
         _selectedDate = picked;
-        _ageResult = _calculateAge(picked);
+        _ageResult = calculateAge(picked);
         _isSaved = false; // reset save state on new date
       });
       _cardAnimController.forward(from: 0);
@@ -834,7 +837,7 @@ class _AgeCalculatorHomeState extends State<AgeCalculatorHome>
 
   Widget _buildBirthdayCard() {
     final result = _ageResult!;
-    final isToday = result.daysUntilNextBirthday <= 1;
+    final isToday = result.daysUntilNextBirthday == 0;
 
     return Container(
       decoration: BoxDecoration(
