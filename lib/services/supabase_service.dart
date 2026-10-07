@@ -7,7 +7,8 @@ class SupabaseService {
 
   SupabaseClient get _client => Supabase.instance.client;
 
-  /// Save a calculation result to the `calculations` table.
+  /// Save or update a calculation in the `calculations` table using upsert.
+  /// Rejects future birth dates and onConflict matches ('user_id,birth_date').
   Future<void> saveCalculation({
     required DateTime birthDate,
     required int years,
@@ -17,8 +18,18 @@ class SupabaseService {
     required int totalHours,
     required int totalMinutes,
     required String dayOfWeekBorn,
+    String? label,
   }) async {
-    await _client.from('calculations').insert({
+    // 1. Reject future dates
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final birthMidnight = DateTime(birthDate.year, birthDate.month, birthDate.day);
+    if (birthMidnight.isAfter(today)) {
+      throw ArgumentError('Birth date cannot be in the future.');
+    }
+
+    final userId = _client.auth.currentUser?.id;
+    final payload = <String, dynamic>{
       'birth_date': birthDate.toIso8601String().substring(0, 10),
       'years': years,
       'months': months,
@@ -27,16 +38,34 @@ class SupabaseService {
       'total_hours': totalHours,
       'total_minutes': totalMinutes,
       'day_of_week_born': dayOfWeekBorn,
-    });
+    };
+
+    if (userId != null) {
+      payload['user_id'] = userId;
+    }
+    if (label != null && label.trim().isNotEmpty) {
+      payload['label'] = label.trim();
+    }
+
+    await _client.from('calculations').upsert(
+          payload,
+          onConflict: 'user_id,birth_date',
+        );
   }
 
-  /// Fetch the last 20 saved calculations, newest first.
+  /// Fetch the authenticated user's saved calculations, newest first.
   Future<List<Map<String, dynamic>>> getHistory() async {
-    final response = await _client
-        .from('calculations')
-        .select()
-        .order('calculated_at', ascending: false)
-        .limit(20);
+    final userId = _client.auth.currentUser?.id;
+    var query = _client.from('calculations').select();
+    if (userId != null) {
+      query = query.eq('user_id', userId);
+    }
+    final response = await query.order('calculated_at', ascending: false);
     return List<Map<String, dynamic>>.from(response);
+  }
+
+  /// Delete a calculation by ID from the `calculations` table.
+  Future<void> deleteCalculation(String id) async {
+    await _client.from('calculations').delete().eq('id', id);
   }
 }

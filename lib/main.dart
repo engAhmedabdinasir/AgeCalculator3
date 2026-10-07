@@ -1,7 +1,13 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'models/zodiac.dart';
+import 'screens/history_screen.dart';
+import 'screens/login_screen.dart';
+import 'services/auth_service.dart';
 import 'services/supabase_service.dart';
 
 Future<void> main() async {
@@ -22,12 +28,11 @@ Future<void> main() async {
     }
   }
 
-  // Fallback to the default credentials if still empty
-  if (supabaseUrl.isEmpty) {
-    supabaseUrl = 'https://gzzruzkwkryyvscyombs.supabase.co';
-  }
-  if (supabaseAnonKey.isEmpty) {
-    supabaseAnonKey = 'sb_publishable_2lks3IuC_r3r4EnEZa5EXA_MAKVpm67';
+  // Strictly require Supabase configuration
+  if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+    throw StateError(
+      'Missing Supabase credentials. Please specify SUPABASE_URL and SUPABASE_ANON_KEY via environment variables or assets/.env.local',
+    );
   }
 
   await Supabase.initialize(
@@ -57,7 +62,7 @@ class AgeCalculatorApp extends StatelessWidget {
           backgroundColor: Color(0xFF1E1B2E),
         ),
       ),
-      home: const AgeCalculatorHome(),
+      home: const AuthGate(),
     );
 
     // On web/desktop, wrap in a phone frame for a mobile feel
@@ -79,6 +84,27 @@ class AgeCalculatorApp extends StatelessWidget {
     }
 
     return app;
+  }
+}
+
+// ─────────────────────────────────────────────
+// Auth Gate
+// ─────────────────────────────────────────────
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<AuthState>(
+      stream: AuthService.instance.onAuthStateChange,
+      builder: (context, snapshot) {
+        final session = AuthService.instance.currentSession;
+        if (session != null) {
+          return const AgeCalculatorHome();
+        }
+        return const LoginScreen();
+      },
+    );
   }
 }
 
@@ -206,6 +232,7 @@ class AgeResult {
   final int daysUntilNextBirthday;
   final String nextBirthdayDate;
   final String dayOfWeekBorn;
+  final ZodiacSign zodiacSign;
 
   AgeResult({
     required this.years,
@@ -217,6 +244,7 @@ class AgeResult {
     required this.daysUntilNextBirthday,
     required this.nextBirthdayDate,
     required this.dayOfWeekBorn,
+    required this.zodiacSign,
   });
 }
 
@@ -311,16 +339,20 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
     final totalMinutes = now.difference(birthDate).inMinutes;
 
     final todayMidnight = DateTime(now.year, now.month, now.day);
-    final birthDateMidnight = DateTime(birthDate.year, birthDate.month, birthDate.day);
+    final birthDateMidnight =
+        DateTime(birthDate.year, birthDate.month, birthDate.day);
 
-    DateTime nextBirthday = DateTime(todayMidnight.year, birthDateMidnight.month, birthDateMidnight.day);
+    DateTime nextBirthday = DateTime(
+        todayMidnight.year, birthDateMidnight.month, birthDateMidnight.day);
     if (nextBirthday.isBefore(todayMidnight)) {
-      nextBirthday = DateTime(todayMidnight.year + 1, birthDateMidnight.month, birthDateMidnight.day);
+      nextBirthday = DateTime(
+          todayMidnight.year + 1, birthDateMidnight.month, birthDateMidnight.day);
     }
     final daysUntilNext = nextBirthday.difference(todayMidnight).inDays;
     final nextBirthdayStr =
         '${birthDate.day} ${_months[birthDate.month - 1]} ${nextBirthday.year}';
     final dayOfWeek = _weekdays[birthDate.weekday - 1];
+    final zodiac = ZodiacSign.fromDate(birthDate);
 
     return AgeResult(
       years: years,
@@ -332,6 +364,7 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
       daysUntilNextBirthday: daysUntilNext,
       nextBirthdayDate: nextBirthdayStr,
       dayOfWeekBorn: dayOfWeek,
+      zodiacSign: zodiac,
     );
   }
 
@@ -371,6 +404,27 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
   /// Save the current calculation to Supabase.
   Future<void> _saveToCloud() async {
     if (_ageResult == null || _selectedDate == null || _isSaving) return;
+
+    // Reject future dates
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final birthMidnight =
+        DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+    if (birthMidnight.isAfter(today)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Birth date cannot be in the future.'),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() => _isSaving = true);
     try {
       await SupabaseService.instance.saveCalculation(
@@ -405,12 +459,46 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
           ),
         );
       }
-    } catch (e) {
+    } on SocketException {
       setState(() => _isSaving = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error saving: $e'),
+            content:
+                const Text('No internet connection. Please check your network.'),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } on PostgrestException catch (e) {
+      setState(() => _isSaving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Database error: ${e.message}'),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isSaving = false);
+      final errorStr = e.toString().toLowerCase();
+      final msg = (errorStr.contains('socket') ||
+              errorStr.contains('network') ||
+              errorStr.contains('failed host lookup') ||
+              errorStr.contains('clientexception'))
+          ? 'No internet connection. Please check your network.'
+          : 'Error saving: $e';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
             backgroundColor: Colors.red.shade700,
             behavior: SnackBarBehavior.floating,
             shape:
@@ -419,16 +507,6 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
         );
       }
     }
-  }
-
-  /// Show history bottom sheet fetched from Supabase.
-  Future<void> _showHistory() async {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => const _HistoryBottomSheet(),
-    );
   }
 
   String _formatDate(DateTime date) {
@@ -453,7 +531,8 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
         child: SafeArea(
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            // Bottom padding of 90 ensures content never gets covered by FAB
+            padding: const EdgeInsets.only(left: 20, right: 20, top: 24, bottom: 90),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -472,6 +551,8 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
                           const SizedBox(height: 16),
                           _buildStatsGrid(),
                           const SizedBox(height: 16),
+                          _buildZodiacCard(),
+                          const SizedBox(height: 16),
                           _buildBirthdayCard(),
                           const SizedBox(height: 20),
                           _buildSaveButton(),
@@ -487,9 +568,14 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
           ),
         ),
       ),
-      // History FAB
+      // Centered Extended History FAB
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showHistory,
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const HistoryScreen()),
+          );
+        },
         backgroundColor: const Color(0xFF6C63FF),
         foregroundColor: Colors.white,
         elevation: 8,
@@ -504,11 +590,9 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(10),
+          width: 46,
+          height: 46,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF6C63FF), Color(0xFFB06AB3)],
-            ),
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
@@ -518,29 +602,44 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
               ),
             ],
           ),
-          child: const Icon(Icons.cake_rounded, color: Colors.white, size: 26),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.asset(
+              'assets/logo.png',
+              fit: BoxFit.cover,
+            ),
+          ),
         ),
         const SizedBox(width: 14),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Age Calculator',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                letterSpacing: 0.5,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Age Calculator',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
               ),
-            ),
-            Text(
-              'Powered by Supabase ⚡',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.white.withValues(alpha: 0.5),
+              Text(
+                'Powered by Supabase ⚡',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white.withValues(alpha: 0.5),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.logout_rounded, color: Colors.white70),
+          tooltip: 'Logout',
+          onPressed: () async {
+            await AuthService.instance.signOut();
+          },
         ),
       ],
     );
@@ -771,65 +870,91 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
     );
   }
 
-  String _formatNumber(int number) {
-    final str = number.toString();
-    final buffer = StringBuffer();
-    int count = 0;
-    for (int i = str.length - 1; i >= 0; i--) {
-      if (count > 0 && count % 3 == 0) buffer.write(',');
-      buffer.write(str[i]);
-      count++;
-    }
-    return buffer.toString().split('').reversed.join();
-  }
+  Widget _buildZodiacCard() {
+    final result = _ageResult!;
+    final zodiac = result.zodiacSign;
 
-  Widget _buildStatCard({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-    bool smallText = false,
-  }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.08),
+            Colors.white.withValues(alpha: 0.04),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.1),
+        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.all(20),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF6C63FF), Color(0xFFB06AB3)],
+              ),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF6C63FF).withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
-                child: Icon(icon, color: color, size: 16),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(label,
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white.withValues(alpha: 0.5),
-                        fontWeight: FontWeight.w500),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-              ),
-            ],
+              ],
+            ),
+            child: Text(
+              zodiac.symbol,
+              style: const TextStyle(fontSize: 28),
+            ),
           ),
-          Text(value,
-              style: TextStyle(
-                  fontSize: smallText ? 16 : 20,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      zodiac.name,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6C63FF).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        zodiac.element,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF4FC3F7),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Zodiac Sign  ·  ${zodiac.dateRange}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1030,299 +1155,6 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
       ),
     );
   }
-}
-
-// ─────────────────────────────────────────────
-// History Bottom Sheet
-// ─────────────────────────────────────────────
-class _HistoryBottomSheet extends StatefulWidget {
-  const _HistoryBottomSheet();
-
-  @override
-  State<_HistoryBottomSheet> createState() => _HistoryBottomSheetState();
-}
-
-class _HistoryBottomSheetState extends State<_HistoryBottomSheet> {
-  List<Map<String, dynamic>>? _history;
-  String? _error;
-
-  static const List<String> _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadHistory();
-  }
-
-  Future<void> _loadHistory() async {
-    try {
-      final data = await SupabaseService.instance.getHistory();
-      setState(() => _history = data);
-    } catch (e) {
-      setState(() => _error = e.toString());
-    }
-  }
-
-  String _formatBirthDate(String isoDate) {
-    final d = DateTime.tryParse(isoDate);
-    if (d == null) return isoDate;
-    return '${d.day} ${_months[d.month - 1]} ${d.year}';
-  }
-
-  String _formatTimestamp(String isoTs) {
-    final d = DateTime.tryParse(isoTs)?.toLocal();
-    if (d == null) return isoTs;
-    final h = d.hour.toString().padLeft(2, '0');
-    final m = d.minute.toString().padLeft(2, '0');
-    return '${d.day} ${_months[d.month - 1]} ${d.year} · $h:$m';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.78,
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1730),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        children: [
-          // Handle bar
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Title row
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: [Color(0xFF6C63FF), Color(0xFFB06AB3)]),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.history_rounded,
-                      color: Colors.white, size: 18),
-                ),
-                const SizedBox(width: 12),
-                const Text('Cloud History',
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white)),
-                const Spacer(),
-                Text('Supabase ⚡',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white.withValues(alpha: 0.4),
-                        fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Divider
-          Container(
-              height: 1,
-              color: Colors.white.withValues(alpha: 0.07),
-              margin: const EdgeInsets.symmetric(horizontal: 20)),
-          const SizedBox(height: 8),
-
-          // Content
-          Expanded(
-            child: _error != null
-                ? _buildError()
-                : _history == null
-                    ? _buildLoading()
-                    : _history!.isEmpty
-                        ? _buildEmpty()
-                        : _buildList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoading() {
-    return const Center(
-      child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
-    );
-  }
-
-  Widget _buildError() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off_rounded,
-                size: 48, color: Colors.red.withValues(alpha: 0.7)),
-            const SizedBox(height: 12),
-            Text('Failed to load history',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white.withValues(alpha: 0.7))),
-            const SizedBox(height: 8),
-            Text(_error!,
-                style: TextStyle(
-                    fontSize: 12, color: Colors.white.withValues(alpha: 0.4)),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () {
-                setState(() {
-                  _history = null;
-                  _error = null;
-                });
-                _loadHistory();
-              },
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6C63FF),
-                  foregroundColor: Colors.white),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.cloud_outlined,
-              size: 52, color: Colors.white.withValues(alpha: 0.2)),
-          const SizedBox(height: 14),
-          Text('No saved calculations yet',
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white.withValues(alpha: 0.5))),
-          const SizedBox(height: 6),
-          Text('Calculate an age and tap "Save to Supabase"',
-              style: TextStyle(
-                  fontSize: 13, color: Colors.white.withValues(alpha: 0.3))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildList() {
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: _history!.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final item = _history![index];
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-                color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
-                width: 1),
-          ),
-          child: Row(
-            children: [
-              // Age badge
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF6C63FF), Color(0xFFB06AB3)]),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('${item['years']}',
-                        style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            height: 1)),
-                    Text('yrs',
-                        style: TextStyle(
-                            fontSize: 9,
-                            color: Colors.white.withValues(alpha: 0.7),
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
-              // Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _formatBirthDate('${item['birth_date']}'),
-                      style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${item['months']}m ${item['days']}d  ·  ${_formatNumber(item['total_days'] as int)} days',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withValues(alpha: 0.45)),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _formatTimestamp('${item['calculated_at']}'),
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.white.withValues(alpha: 0.3)),
-                    ),
-                  ],
-                ),
-              ),
-              // Weekday chip
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${item['day_of_week_born']}'.substring(0, 3),
-                  style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFFB06AB3),
-                      fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   String _formatNumber(int number) {
     final str = number.toString();
@@ -1334,5 +1166,57 @@ class _HistoryBottomSheetState extends State<_HistoryBottomSheet> {
       count++;
     }
     return buffer.toString().split('').reversed.join();
+  }
+
+  Widget _buildStatCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    bool smallText = false,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 16),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(label,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontWeight: FontWeight.w500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+            ],
+          ),
+          Text(value,
+              style: TextStyle(
+                  fontSize: smallText ? 16 : 20,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
   }
 }
