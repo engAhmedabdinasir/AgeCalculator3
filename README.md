@@ -1,10 +1,10 @@
-# <img src="assets/logo.png" width="42" height="42" alt="Age Calculator Logo" valign="middle"/> Age Calculator (Flutter + Supabase)
-
 <p align="center">
-  <img src="assets/logo.png" width="160" height="160" alt="Age Calculator App Logo" style="border-radius: 28px;"/>
+  <img src="assets/images/logo_full.png" width="460" alt="Age Calculator App - Track your journey" style="border-radius: 18px;"/>
 </p>
 
-A premium, modern Flutter application that calculates exact age metrics down to the minute, displays your astrological zodiac sign, and syncs calculations in real-time with **Supabase**.
+# Age Calculator (Flutter + Supabase)
+
+Track your journey with **Age Calculator** — a premium, modern Flutter application that calculates exact age metrics down to the minute, displays astrological zodiac signs, tracks upcoming birthdays, and syncs calculations in real-time with **Supabase**.
 
 ---
 
@@ -158,7 +158,11 @@ lib/
 ├── screens/
 │   ├── login_screen.dart      # Email/password authentication & state handling
 │   └── history_screen.dart    # Cloud calculation history & swipe-to-delete
-└── services/
-    ├── auth_service.dart      # Supabase Auth singleton (signIn, signUp, signOut)
-    └── supabase_service.dart  # Supabase Database client (upsert, getHistory, delete)
+├── services/
+│   ├── auth_service.dart      # Supabase Auth singleton (signIn, signUp, signOut)
+│   └── supabase_service.dart  # Supabase Database client (upsert, getHistory, delete)
+└── theme/
+    └── brand_colors.dart      # Brand color palette, gradients & shadows
+tools/
+└── make_icon.py               # Generates app_icon.png from logo_full.png
 ```

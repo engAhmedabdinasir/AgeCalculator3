@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,8 +8,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'models/zodiac.dart';
 import 'screens/history_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/auth_service.dart';
 import 'services/supabase_service.dart';
+import 'theme/brand_colors.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,9 +38,15 @@ Future<void> main() async {
     );
   }
 
+  // Normalize URL to base URL in case /rest/v1 or trailing slashes were provided
+  final uri = Uri.tryParse(supabaseUrl.trim());
+  if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
+    supabaseUrl = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+  }
+
   await Supabase.initialize(
     url: supabaseUrl,
-    publishableKey: supabaseAnonKey,
+    publishableKey: supabaseAnonKey.trim(),
   );
 
   runApp(const AgeCalculatorApp());
@@ -53,7 +62,7 @@ class AgeCalculatorApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6C63FF),
+          seedColor: BrandColors.primaryBlue,
           brightness: Brightness.dark,
         ),
         useMaterial3: true,
@@ -62,7 +71,11 @@ class AgeCalculatorApp extends StatelessWidget {
           backgroundColor: Color(0xFF1E1B2E),
         ),
       ),
-      home: const AuthGate(),
+      home: const SplashScreen(),
+      routes: {
+        '/home': (context) => const AgeCalculatorHome(),
+        '/login': (context) => const _AuthAwareLoginScreen(),
+      },
     );
 
     // On web/desktop, wrap in a phone frame for a mobile feel
@@ -71,7 +84,7 @@ class AgeCalculatorApp extends StatelessWidget {
         title: 'Age Calculator',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF6C63FF)),
+          colorScheme: ColorScheme.fromSeed(seedColor: BrandColors.primaryBlue),
           useMaterial3: true,
         ),
         home: Scaffold(
@@ -108,6 +121,39 @@ class AuthGate extends StatelessWidget {
   }
 }
 
+/// Helper screen to auto-navigate to '/home' when user successfully signs in
+class _AuthAwareLoginScreen extends StatefulWidget {
+  const _AuthAwareLoginScreen();
+
+  @override
+  State<_AuthAwareLoginScreen> createState() => _AuthAwareLoginScreenState();
+}
+
+class _AuthAwareLoginScreenState extends State<_AuthAwareLoginScreen> {
+  StreamSubscription<AuthState>? _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSubscription = AuthService.instance.onAuthStateChange.listen((data) {
+      if (data.session != null && mounted) {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const LoginScreen();
+  }
+}
+
 // ─────────────────────────────────────────────
 // Mobile Phone Frame (web only)
 // ─────────────────────────────────────────────
@@ -139,7 +185,7 @@ class _MobilePhoneFrame extends StatelessWidget {
             offset: const Offset(0, 20),
           ),
           BoxShadow(
-            color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
+            color: BrandColors.primaryBlue.withValues(alpha: 0.15),
             blurRadius: 40,
             spreadRadius: -5,
             offset: const Offset(0, -5),
@@ -380,7 +426,7 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.dark(
-              primary: Color(0xFF6C63FF),
+              primary: BrandColors.primaryBlue,
               onPrimary: Colors.white,
               surface: Color(0xFF1E1B2E),
               onSurface: Colors.white,
@@ -451,7 +497,7 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
                 Text('Saved to Supabase cloud!'),
               ],
             ),
-            backgroundColor: const Color(0xFF6C63FF),
+            backgroundColor: BrandColors.primaryBlue,
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -576,7 +622,7 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
             MaterialPageRoute(builder: (_) => const HistoryScreen()),
           );
         },
-        backgroundColor: const Color(0xFF6C63FF),
+        backgroundColor: BrandColors.primaryBlue,
         foregroundColor: Colors.white,
         elevation: 8,
         icon: const Icon(Icons.history_rounded),
@@ -590,23 +636,30 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
     return Row(
       children: [
         Container(
-          width: 46,
-          height: 46,
+          width: 44,
+          height: 44,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF6C63FF).withValues(alpha: 0.4),
+                color: BrandColors.primaryBlue.withValues(alpha: 0.35),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
+          padding: const EdgeInsets.all(4),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(8),
             child: Image.asset(
-              'assets/logo.png',
-              fit: BoxFit.cover,
+              'assets/icon/app_icon.png',
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.cake_rounded,
+                size: 24,
+                color: BrandColors.primaryBlue,
+              ),
             ),
           ),
         ),
@@ -639,6 +692,9 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
           tooltip: 'Logout',
           onPressed: () async {
             await AuthService.instance.signOut();
+            if (mounted) {
+              Navigator.pushReplacementNamed(context, '/login');
+            }
           },
         ),
       ],
@@ -681,9 +737,7 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               decoration: BoxDecoration(
                 gradient: _selectedDate != null
-                    ? const LinearGradient(
-                        colors: [Color(0xFF6C63FF), Color(0xFFB06AB3)],
-                      )
+                    ? BrandColors.brandGradientHorizontal
                     : LinearGradient(
                         colors: [
                           Colors.white.withValues(alpha: 0.05),
@@ -694,13 +748,13 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
                 border: Border.all(
                   color: _selectedDate != null
                       ? Colors.transparent
-                      : const Color(0xFF6C63FF).withValues(alpha: 0.5),
+                      : BrandColors.primaryBlue.withValues(alpha: 0.5),
                   width: 1.5,
                 ),
                 boxShadow: _selectedDate != null
                     ? [
                         BoxShadow(
-                          color: const Color(0xFF6C63FF).withValues(alpha: 0.3),
+                          color: BrandColors.primaryBlue.withValues(alpha: 0.3),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),
@@ -744,15 +798,11 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF6C63FF), Color(0xFFB06AB3)],
-        ),
+        gradient: BrandColors.brandGradient,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6C63FF).withValues(alpha: 0.4),
+            color: BrandColors.primaryBlue.withValues(alpha: 0.4),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -893,13 +943,11 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6C63FF), Color(0xFFB06AB3)],
-              ),
+              gradient: BrandColors.brandGradient,
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF6C63FF).withValues(alpha: 0.3),
+                  color: BrandColors.primaryBlue.withValues(alpha: 0.3),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -930,7 +978,7 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
                       padding:
                           const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF6C63FF).withValues(alpha: 0.2),
+                        color: BrandColors.primaryBlue.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -997,7 +1045,7 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
             decoration: BoxDecoration(
               color: isToday
                   ? Colors.white.withValues(alpha: 0.2)
-                  : const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                  : BrandColors.primaryBlue.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Text(isToday ? '🎂' : '🎉',
@@ -1029,11 +1077,17 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
           ),
           if (!isToday)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                    colors: [Color(0xFF6C63FF), Color(0xFFB06AB3)]),
+                color: BrandColors.accentOrange,
                 borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: BrandColors.accentOrange.withValues(alpha: 0.4),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
               child: Column(
                 children: [
@@ -1043,7 +1097,10 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
                           fontWeight: FontWeight.w800,
                           color: Colors.white)),
                   const Text('days',
-                      style: TextStyle(fontSize: 10, color: Colors.white70)),
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
@@ -1064,18 +1121,18 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
           gradient: _isSaved
               ? const LinearGradient(
                   colors: [Color(0xFF2ECC71), Color(0xFF27AE60)])
-              : LinearGradient(
-                  colors: _isSaving
-                      ? [
-                          const Color(0xFF6C63FF).withValues(alpha: 0.5),
-                          const Color(0xFFB06AB3).withValues(alpha: 0.5),
-                        ]
-                      : [const Color(0xFF6C63FF), const Color(0xFFB06AB3)],
-                ),
+              : (_isSaving
+                  ? LinearGradient(
+                      colors: [
+                        BrandColors.primaryBlue.withValues(alpha: 0.5),
+                        BrandColors.secondaryTeal.withValues(alpha: 0.5),
+                      ],
+                    )
+                  : BrandColors.brandGradientHorizontal),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: (_isSaved ? const Color(0xFF2ECC71) : const Color(0xFF6C63FF))
+              color: (_isSaved ? const Color(0xFF2ECC71) : BrandColors.primaryBlue)
                   .withValues(alpha: 0.35),
               blurRadius: 16,
               offset: const Offset(0, 6),
@@ -1123,21 +1180,32 @@ class AgeCalculatorHomeState extends State<AgeCalculatorHome>
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(28),
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    const Color(0xFF6C63FF).withValues(alpha: 0.15),
-                    const Color(0xFFB06AB3).withValues(alpha: 0.1),
-                  ],
-                ),
-                border: Border.all(
-                    color: const Color(0xFF6C63FF).withValues(alpha: 0.2)),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: BrandColors.primaryBlue.withValues(alpha: 0.35),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
-              child: Icon(Icons.cake_outlined,
-                  size: 56,
-                  color: const Color(0xFF6C63FF).withValues(alpha: 0.7)),
+              padding: const EdgeInsets.all(10),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.asset(
+                  'assets/icon/app_icon.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.cake_outlined,
+                    size: 40,
+                    color: BrandColors.primaryBlue,
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 20),
             Text('Select your date of birth',

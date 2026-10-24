@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
+import '../theme/brand_colors.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -60,7 +61,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Deleted calculation from Supabase'),
-            backgroundColor: const Color(0xFF6C63FF),
+            backgroundColor: BrandColors.primaryBlue,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -122,12 +123,46 @@ class _HistoryScreenState extends State<HistoryScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          'Saved Calculations',
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-          ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: BrandColors.primaryBlue.withValues(alpha: 0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(2.5),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(5),
+                child: Image.asset(
+                  'assets/icon/app_icon.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.history_rounded,
+                    size: 16,
+                    color: BrandColors.primaryBlue,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'History',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+          ],
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
@@ -167,8 +202,49 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildLoading() {
-    return const Center(
-      child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: BrandColors.primaryBlue.withValues(alpha: 0.35),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset(
+                'assets/icon/app_icon.png',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.history_rounded,
+                  size: 28,
+                  color: BrandColors.primaryBlue,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              color: BrandColors.primaryBlue,
+              strokeWidth: 2.5,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -208,7 +284,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Try Again'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C63FF),
+                backgroundColor: BrandColors.primaryBlue,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 shape: RoundedRectangleBorder(
@@ -227,12 +303,35 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.cloud_outlined,
-            size: 64,
-            color: Colors.white.withValues(alpha: 0.2),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: BrandColors.primaryBlue.withValues(alpha: 0.35),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                'assets/icon/app_icon.png',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.cloud_outlined,
+                  size: 36,
+                  color: BrandColors.primaryBlue,
+                ),
+              ),
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Text(
             'No saved calculations yet',
             style: TextStyle(
@@ -305,22 +404,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
               color: Colors.white.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFF6C63FF).withValues(alpha: 0.2),
+                color: BrandColors.primaryBlue.withValues(alpha: 0.2),
                 width: 1,
               ),
             ),
             child: Row(
               children: [
-                // Age badge
+                // Age badge with brand gradient
                 Container(
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF6C63FF), Color(0xFFB06AB3)],
-                    ),
+                    gradient: BrandColors.brandGradient,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Column(
@@ -339,7 +434,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         'yrs',
                         style: TextStyle(
                           fontSize: 9,
-                          color: Colors.white.withValues(alpha: 0.7),
+                          color: Colors.white.withValues(alpha: 0.85),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -398,14 +493,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                      color: BrandColors.primaryBlue.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       dayDisplay,
                       style: const TextStyle(
                         fontSize: 11,
-                        color: Color(0xFFB06AB3),
+                        color: BrandColors.accentOrange,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

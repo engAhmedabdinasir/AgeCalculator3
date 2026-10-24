@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
+import '../theme/brand_colors.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -43,7 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 content: const Text(
                   '✉️ Check your inbox! Tap the confirmation link to activate your account, then sign in.',
                 ),
-                backgroundColor: const Color(0xFF6C63FF),
+                backgroundColor: BrandColors.primaryBlue,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -72,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
               content: const Text(
                 '📧 Email not confirmed yet. We\'ll resend the confirmation link.',
               ),
-              backgroundColor: const Color(0xFF6C63FF),
+              backgroundColor: BrandColors.primaryBlue,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -127,7 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('✉️ Confirmation email resent! Check your inbox.'),
-            backgroundColor: const Color(0xFF6C63FF),
+            backgroundColor: BrandColors.primaryBlue,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             duration: const Duration(seconds: 4),
@@ -174,25 +175,32 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Project Logo
+                      // Official Logo inside rounded white card with soft blue glow
                       Container(
-                        width: 96,
-                        height: 96,
+                        width: 220,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         decoration: BoxDecoration(
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF6C63FF).withValues(alpha: 0.35),
+                              color: BrandColors.primaryBlue.withValues(alpha: 0.35),
                               blurRadius: 24,
                               offset: const Offset(0, 8),
                             ),
                           ],
                         ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(24),
+                          borderRadius: BorderRadius.circular(18),
                           child: Image.asset(
-                            'assets/logo.png',
-                            fit: BoxFit.cover,
+                            'assets/images/logo_full.png',
+                            width: 220,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => const Icon(
+                              Icons.cake_rounded,
+                              size: 64,
+                              color: BrandColors.primaryBlue,
+                            ),
                           ),
                         ),
                       ),
@@ -259,7 +267,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
                                   borderSide: const BorderSide(
-                                    color: Color(0xFF6C63FF),
+                                    color: BrandColors.primaryBlue,
                                     width: 1.5,
                                   ),
                                 ),
@@ -327,7 +335,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
                                   borderSide: const BorderSide(
-                                    color: Color(0xFF6C63FF),
+                                    color: BrandColors.primaryBlue,
                                     width: 1.5,
                                   ),
                                 ),
@@ -357,20 +365,18 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 24),
 
-                            // Submit button
+                            // Submit button with Brand Blue -> Teal gradient
                             GestureDetector(
                               onTap: _isLoading ? null : _submit,
                               child: Container(
                                 width: double.infinity,
                                 padding: const EdgeInsets.symmetric(vertical: 16),
                                 decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF6C63FF), Color(0xFFB06AB3)],
-                                  ),
+                                  gradient: BrandColors.brandGradientHorizontal,
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF6C63FF).withValues(alpha: 0.4),
+                                      color: BrandColors.primaryBlue.withValues(alpha: 0.4),
                                       blurRadius: 16,
                                       offset: const Offset(0, 6),
                                     ),
@@ -416,7 +422,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? 'Already have an account? Sign In'
                               : "Don't have an account? Sign Up",
                           style: const TextStyle(
-                            color: Color(0xFFB06AB3),
+                            color: BrandColors.secondaryTeal,
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
